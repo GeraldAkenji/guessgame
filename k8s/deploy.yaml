@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: guessing-game
+  namespace: gerald-env
+spec:
+  selector:
+    matchLabels:
+      app: guessing-game
+      label: Green
+  template:
+    metadata:
+      labels:
+        app: guessing-game
+        label: Green
+    spec:
+      containers:
+      - name: guessing-game
+        image: IMAGE_NAME
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+        ports:
+        - containerPort: 8501
