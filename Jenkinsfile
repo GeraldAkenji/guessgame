@@ -17,6 +17,32 @@ pipeline {
                 checkout scmGit(branches: [[name: '*/main']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/GeraldAkenji/guessgame.git']])
             }
         }
+        stage("Install Dependencies") {
+            steps {
+                script {
+                    sh "python3 -m venv venv"
+                    sh ". venv/bin/activate"
+                    sh "python3 -m pip install -r requirements.txt --no-cache-dir --break-system-packages"
+                }
+            }
+        }
+        tage("Trivy File Scan") {
+            steps {
+                script {
+                    dir('./venv'){
+                        def result = sh(script: "trivy filesystem --exit-code 1 --severity CRITICAL,HIGH .", returnStatus: true)
+
+                        if (result != 0) {
+                            def trivy_output = sh(script: "trivy filesystem --exit-code 1 --severity CRITICAL,HIGH .", returnStatus: true)
+                            slackSend channel: "$SLACK_CHANNEL", message: "Trivy found vulnerabilities in the site packages: \n${trivy_output}"
+                        } else {
+                            slackSend channel: "$SLACK_CHANNEL", message: "Trivy passed with no vulnerabilities."
+                        }
+                    }
+                    
+                }
+            }
+        }
         stage("Docker Login") {
             steps {
                 script {
@@ -28,6 +54,25 @@ pipeline {
             steps {
                 script {
                     sh "docker build -t $IMAGE_NAME ."
+                }
+            }
+        }
+        stage("Docker Scout") {
+            steps {
+                script {
+                    sh "curl -fsSL https://raw.githubusercontent.com/docker/scout-cli/main/install.sh -o install-scout.sh"
+                    sh "chmod +x install-scout.sh"
+                    sh "./install-scout.sh"
+
+                    def scanOutput = sh(script: "docker scout cves $IMAGE_NAME --exit-code --only-severity critical,high", returnStatus: true)
+                    def result = sh(script: "docker scout cves $IMAGE_NAME --exit-code --only-severity critical,high", returnStatus: true)
+
+                    if (result != 0){
+                        
+                        slackSend(channel: "$SLACK_CHANNEL", message: "Docker Scout found vulnerabilities:\n${scanOutput}")
+                    } else {
+                        slackSend(channel: "$SLACK_CHANNEL", message: "Docker Scout scan passed with no vulnerabilities.")
+                    }
                 }
             }
         }
